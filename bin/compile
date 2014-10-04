@@ -27,7 +27,7 @@ unset GIT_DIR
 
 # parse and derive params
 BUILD_DIR=$1
-CACHE_DIR="$2/vendor"
+CACHE_DIR=$2
 LP_DIR=`cd $(dirname $0); cd ..; pwd`
 BUILDPACK_DIR="$(dirname $(dirname $0))"
 
@@ -51,6 +51,12 @@ echo "Vendoring R $R_VERSION" | indent
 echo "Downloading and unpacking R binaries" | indent
 mkdir -p $VENDOR_DIR && curl $R_BINARIES -s -o - | tar xzf - -C $VENDOR_DIR
 
+if [ "$(cat $CACHE_DIR/vendor/R/bin/.version 2>/dev/null)" = "$R_VERSION" ]
+then
+  echo "Restoring Cached Packages" | indent
+  cp -R $CACHE_DIR/vendor/R/* $VENDOR_DIR/R
+fi
+
 # need to copy the binaries to /app/vendor so that R works
 mkdir -p /app/vendor/gcc
 cp -R $VENDOR_DIR/gcc/* /app/vendor/gcc
@@ -63,6 +69,7 @@ cp -R $VENDOR_DIR/gsl/* /app/vendor/gsl
 
 mkdir -p /app/vendor/R
 cp -R $VENDOR_DIR/R/* /app/vendor/R
+
 
 # HACK: need to copy over the gcc libs so that packages can find them
 mkdir -p /app/vendor/R/lib64/R/lib
@@ -87,6 +94,7 @@ cp "$BUILDPACK_DIR/bin/r_environment.sh" $BUILD_DIR/.profile.d/r_environment.sh
 mkdir -p /app/vendor/R/lib64/R/doc/html
 touch /app/vendor/R/lib64/R/doc/html/R.css
 
+
 # install dependencies from CRAN
 echo "Executing init.r script" | indent
 
@@ -99,6 +107,12 @@ echo "Executing init.r script" | indent
   options(repos=r);
   `cat $BUILD_DIR/init.r`
 RPROG
+
+echo "Caching R packages for future builds" | indent
+rm -rf $CACHE_DIR && mkdir -p $CACHE_DIR/vendor
+echo $R_VERSION > /app/vendor/R/bin/.version
+
+cp -R /app/vendor/R $CACHE_DIR/vendor/.
 
 echo "R $R_VERSION successfully installed" | indent
 
